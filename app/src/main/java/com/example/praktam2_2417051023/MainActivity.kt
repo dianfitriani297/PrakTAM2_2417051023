@@ -16,23 +16,25 @@ import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.example.praktam2_2417051023.model.MitosFaktaHewanSource
+import com.example.praktam2_2417051023.ui.theme.ZoopediaTheme
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
-            ZoopediaScreen()
+            ZoopediaTheme {
+                ZoopediaScreen()
+            }
         }
     }
 }
@@ -59,6 +61,8 @@ fun ZoopediaScreen() {
         Color(0xFFF3E5F5)
     )
 
+    val favList = remember { mutableStateMapOf<String, Boolean>() }
+
     var searchText by remember { mutableStateOf("") }
 
     val filteredList = MitosFaktaHewanSource.daftarMitosFaktaHewan.filter {
@@ -68,7 +72,7 @@ fun ZoopediaScreen() {
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.White),
+            .background(MaterialTheme.colorScheme.background),
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
@@ -76,9 +80,8 @@ fun ZoopediaScreen() {
         item {
             Text(
                 text = "Zoopedia",
-                fontSize = 32.sp,
-                fontWeight = FontWeight.ExtraBold,
-                color = Color(0xFF333333)
+                style = MaterialTheme.typography.titleLarge,
+                color = MaterialTheme.colorScheme.primary
             )
         }
 
@@ -87,117 +90,148 @@ fun ZoopediaScreen() {
                 value = searchText,
                 onValueChange = { searchText = it },
                 placeholder = { Text("Cari hewan...") },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(Color(0xFFF5F5F5), RoundedCornerShape(16.dp)),
+                modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(16.dp),
                 colors = TextFieldDefaults.colors(
+                    focusedContainerColor = MaterialTheme.colorScheme.surface,
+                    unfocusedContainerColor = MaterialTheme.colorScheme.surface,
                     focusedIndicatorColor = Color.Transparent,
                     unfocusedIndicatorColor = Color.Transparent
                 )
             )
         }
 
-        item {
-            Text(
-                text = "Rekomendasi Hewan",
-                fontWeight = FontWeight.Bold,
-                fontSize = 18.sp
-            )
+        if (filteredList.isEmpty()) {
 
-            LazyRow(
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                items(filteredList) { hewan ->
-                    Card(
-                        modifier = Modifier.width(140.dp),
-                        shape = RoundedCornerShape(16.dp)
-                    ) {
-                        Column {
+            item {
+                Text(
+                    text = "Hewan tidak ditemukan",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Color.Gray
+                )
+            }
+
+        } else {
+
+            item {
+                Text(
+                    text = "Rekomendasi Hewan",
+                    style = MaterialTheme.typography.titleMedium
+                )
+            }
+
+            item {
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    items(filteredList) { hewan ->
+                        Card(
+                            modifier = Modifier.width(140.dp),
+                            shape = RoundedCornerShape(16.dp),
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.surface
+                            )
+                        ) {
+                            Column {
+                                Image(
+                                    painter = painterResource(id = hewan.imageRes),
+                                    contentDescription = hewan.namaHewan,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(100.dp),
+                                    contentScale = ContentScale.Crop
+                                )
+
+                                Text(
+                                    text = hewan.namaHewan,
+                                    modifier = Modifier.padding(8.dp),
+                                    style = MaterialTheme.typography.titleSmall
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            item {
+                Text(
+                    text = "Daftar Hewan",
+                    style = MaterialTheme.typography.titleMedium
+                )
+            }
+
+            items(filteredList) { hewan ->
+
+                val index = MitosFaktaHewanSource.daftarMitosFaktaHewan.indexOf(hewan)
+                val bgCard = listWarna[index % listWarna.size]
+                val warnaBtn = warnaButton(bgCard)
+
+                val fav = favList[hewan.namaHewan] ?: false
+
+                Card(
+                    shape = RoundedCornerShape(28.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = bgCard
+                    ),
+                    elevation = CardDefaults.cardElevation(2.dp)
+                ) {
+
+                    Column(modifier = Modifier.padding(16.dp)) {
+
+                        Box {
                             Image(
                                 painter = painterResource(id = hewan.imageRes),
                                 contentDescription = hewan.namaHewan,
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .height(100.dp),
+                                    .height(170.dp)
+                                    .clip(RoundedCornerShape(20.dp)),
                                 contentScale = ContentScale.Crop
                             )
 
-                            Text(
-                                text = hewan.namaHewan,
-                                modifier = Modifier.padding(8.dp),
-                                fontWeight = FontWeight.Bold
-                            )
+                            IconButton(
+                                onClick = {
+                                    favList[hewan.namaHewan] = !fav
+                                },
+                                modifier = Modifier.align(Alignment.TopEnd)
+                            ) {
+                                Icon(
+                                    imageVector = if (fav)
+                                        Icons.Filled.Favorite
+                                    else
+                                        Icons.Outlined.FavoriteBorder,
+                                    contentDescription = "Favorite",
+                                    tint = if (fav) Color.Red else Color.White
+                                )
+                            }
                         }
-                    }
-                }
-            }
-        }
 
-        items(filteredList) { hewan ->
+                        Spacer(modifier = Modifier.height(16.dp))
 
-            val index = MitosFaktaHewanSource.daftarMitosFaktaHewan.indexOf(hewan)
-            val bgCard = listWarna[index % listWarna.size]
-            val warnaBtn = warnaButton(bgCard)
-
-            var fav by remember { mutableStateOf(false) }
-
-            Card(
-                shape = RoundedCornerShape(28.dp),
-                colors = CardDefaults.cardColors(containerColor = bgCard),
-                elevation = CardDefaults.cardElevation(2.dp)
-            ) {
-
-                Column(modifier = Modifier.padding(16.dp)) {
-
-                    Box {
-                        Image(
-                            painter = painterResource(id = hewan.imageRes),
-                            contentDescription = hewan.namaHewan,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(170.dp)
-                                .clip(RoundedCornerShape(20.dp)),
-                            contentScale = ContentScale.Crop
+                        Text(
+                            text = hewan.namaHewan,
+                            style = MaterialTheme.typography.titleMedium
                         )
 
-                        IconButton(
-                            onClick = { fav = !fav },
-                            modifier = Modifier.align(Alignment.TopEnd)
+                        Text(
+                            text = "Kumpulan mitos dan fakta tentang ${hewan.namaHewan.lowercase()}",
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        Button(
+                            onClick = { },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = warnaBtn
+                            ),
+                            modifier = Modifier.fillMaxWidth()
                         ) {
-                            Icon(
-                                imageVector = if (fav)
-                                    Icons.Filled.Favorite
-                                else
-                                    Icons.Outlined.FavoriteBorder,
-                                contentDescription = "Favorite",
-                                tint = if (fav) Color.Red else Color.White
+                            Text(
+                                "Mulai",
+                                color = MaterialTheme.colorScheme.onPrimary
                             )
                         }
-                    }
-
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    Text(
-                        text = hewan.namaHewan,
-                        fontSize = 22.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-
-                    Text(
-                        text = "Kumpulan mitos dan fakta tentang ${hewan.namaHewan.lowercase()}",
-                        fontSize = 14.sp,
-                        color = Color.DarkGray.copy(alpha = 0.7f)
-                    )
-
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    Button(
-                        onClick = { },
-                        colors = ButtonDefaults.buttonColors(containerColor = warnaBtn),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text("Mulai", color = Color.White)
                     }
                 }
             }
