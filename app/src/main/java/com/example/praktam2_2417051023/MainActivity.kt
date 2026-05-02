@@ -6,6 +6,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -20,25 +21,44 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.ColorFilter
-import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.navigation.NavController
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.rememberNavController
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import com.example.praktam2_2417051023.model.MitosFaktaHewan
-import com.example.praktam2_2417051023.model.MitosFaktaHewanSource
-import com.example.praktam2_2417051023.ui.theme.ZoopediaTheme
+import com.example.praktam2_2417051023.ui.theme.*
+import com.example.praktam2_2417051023.network.RetrofitClient
+import coil.compose.AsyncImage
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+
         setContent {
             ZoopediaTheme {
-                ZoopediaScreen()
+                val navController = rememberNavController()
+                var hewanList by remember { mutableStateOf<List<MitosFaktaHewan>>(emptyList()) }
+
+                NavHost(navController = navController, startDestination = "home") {
+                    composable("home") {
+                        ZoopediaScreen(
+                            navController = navController,
+                            onHewanLoaded = { fetchedData -> hewanList = fetchedData }
+                        )
+                    }
+                    composable("quiz/{namaHewan}") { backStackEntry ->
+                        val nama = backStackEntry.arguments?.getString("namaHewan")
+                        val hewan = hewanList.find { it.namaHewan == nama }
+                        hewan?.let { QuizPage(hewan = it, navController = navController) }
+                    }
+                }
             }
         }
     }
@@ -46,47 +66,77 @@ class MainActivity : ComponentActivity() {
 
 fun warnaButton(warna: Color): Color {
     return when (warna) {
-        Color(0xFFE3F2FD) -> Color(0xFF2196F3)
-        Color(0xFFFFF3E0) -> Color(0xFFFF9800)
-        Color(0xFFE8F5E9) -> Color(0xFF4CAF50)
-        Color(0xFFFCE4EC) -> Color(0xFFE91E63)
-        Color(0xFFF3E5F5) -> Color(0xFF9C27B0)
+        BlueCard -> BlueButton
+        OrangeCard -> OrangeButton
+        GreenCard -> GreenButton
+        PinkCard -> PinkButton
+        PurpleCard -> PurpleButton
         else -> Color.DarkGray
     }
 }
 
 @Composable
-fun ZoopediaScreen() {
-    val listWarna = listOf(
-        Color(0xFFE3F2FD), Color(0xFFFFF3E0), Color(0xFFE8F5E9),
-        Color(0xFFFCE4EC), Color(0xFFF3E5F5)
-    )
-
+fun ZoopediaScreen(navController: NavController, onHewanLoaded: (List<MitosFaktaHewan>) -> Unit) {
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
-    val loadingMap = remember { mutableStateMapOf<String, Boolean>() }
-    val finishedList = remember { mutableStateMapOf<String, Boolean>() }
 
-    var currentScreen by remember { mutableStateOf("home") }
-    var selectedHewan by remember { mutableStateOf<MitosFaktaHewan?>(null) }
-    val favList = remember { mutableStateMapOf<String, Boolean>() }
+    var hewanListInternal by remember { mutableStateOf<List<MitosFaktaHewan>>(emptyList()) }
+    var isLoadingData by remember { mutableStateOf(true) }
+    var isError by remember { mutableStateOf(false) }
+
+    val loadingMap = remember { mutableStateMapOf<MitosFaktaHewan, Boolean>() }
+    val finishedList = remember { mutableStateMapOf<MitosFaktaHewan, Boolean>() }
+    val favList = remember { mutableStateMapOf<MitosFaktaHewan, Boolean>() }
     var searchText by remember { mutableStateOf("") }
 
-    val filteredList = MitosFaktaHewanSource.daftarMitosFaktaHewan.filter {
-        it.namaHewan.contains(searchText, ignoreCase = true)
+    LaunchedEffect(Unit) {
+        try {
+            val response = RetrofitClient.instance.getHewan()
+            hewanListInternal = response
+            onHewanLoaded(response)
+            isLoadingData = false
+            isError = false
+        } catch (e: Exception) {
+            isLoadingData = false
+            isError = true
+            scope.launch { snackbarHostState.showSnackbar("Gagal memuat data: ${e.message}") }
+        }
     }
 
-    Box(modifier = Modifier.fillMaxSize()) {
-        if (currentScreen == "home") {
+    val displayList = hewanListInternal.filter { (it.namaHewan ?: "").contains(searchText, ignoreCase = true) }
+    val listWarna = listOf(BlueCard, OrangeCard, GreenCard, PinkCard, PurpleCard)
+
+    Box(modifier = Modifier.fillMaxSize().statusBarsPadding()) {
+        if (isLoadingData) {
+            Box(modifier = Modifier.fillMaxSize().background(Color.White), contentAlignment = Alignment.Center) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Image(
+                        painter = painterResource(id = R.drawable.logo_zoopedia),
+                        contentDescription = "Logo Zoopedia",
+                        modifier = Modifier.size(280.dp),
+                        contentScale = ContentScale.Fit
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    CircularProgressIndicator(color = Color(0xFF4CAF50), strokeWidth = 4.dp)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(text = "Loading...", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                }
+            }
+        } else if (isError) {
+            Box(modifier = Modifier.fillMaxSize().padding(32.dp), contentAlignment = Alignment.Center) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("Gagal Memuat Data", style = MaterialTheme.typography.titleLarge, color = Color.Red)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text("Pastikan koneksi internet Anda menyala", textAlign = TextAlign.Center, color = Color.Gray)
+                }
+            }
+        } else {
             LazyColumn(
                 modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background),
                 contentPadding = PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                item {
-                    Text(text = "Zoopedia", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.primary)
-                }
-
+                item { Text("Zoopedia", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.primary) }
                 item {
                     TextField(
                         value = searchText,
@@ -95,178 +145,181 @@ fun ZoopediaScreen() {
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(16.dp),
                         colors = TextFieldDefaults.colors(
+                            focusedContainerColor = Color(0xFFE0E0E0),
+                            unfocusedContainerColor = Color(0xFFE0E0E0),
                             focusedIndicatorColor = Color.Transparent,
                             unfocusedIndicatorColor = Color.Transparent
                         )
                     )
                 }
 
-                if (filteredList.isEmpty()) {
-                    item { Text(text = "Hewan tidak ditemukan", color = Color.Gray) }
-                } else {
-                    item { Text(text = "Rekomendasi", style = MaterialTheme.typography.titleMedium) }
-
-                    item {
-                        LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                            items(filteredList) { hewan ->
-                                Card(modifier = Modifier.width(140.dp), shape = RoundedCornerShape(16.dp)) {
-                                    Column {
-                                        Image(painter = painterResource(id = hewan.imageRes), contentDescription = null, modifier = Modifier.fillMaxWidth().height(100.dp), contentScale = ContentScale.Crop)
-                                        Text(text = hewan.namaHewan, modifier = Modifier.padding(8.dp))
-                                    }
+                item {
+                    Text("Rekomendasi", style = MaterialTheme.typography.titleMedium, color = Color.Black)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    LazyRow(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        items(displayList) { hewan ->
+                            val cardCol = listWarna[displayList.indexOf(hewan) % listWarna.size]
+                            Card(
+                                modifier = Modifier.width(130.dp).clickable { navController.navigate("quiz/${hewan.namaHewan ?: ""}") },
+                                shape = RoundedCornerShape(16.dp),
+                                colors = CardDefaults.cardColors(containerColor = cardCol)
+                            ) {
+                                Column {
+                                    AsyncImage(
+                                        model = hewan.imageUrl,
+                                        contentDescription = null,
+                                        modifier = Modifier.fillMaxWidth().height(100.dp).clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)),
+                                        contentScale = ContentScale.Crop,
+                                        placeholder = painterResource(id = R.drawable.logo_zoopedia),
+                                        error = painterResource(id = R.drawable.logo_zoopedia)
+                                    )
+                                    Text(hewan.namaHewan ?: "Hewan", modifier = Modifier.padding(12.dp), style = MaterialTheme.typography.bodyMedium, color = Color.Black)
                                 }
                             }
                         }
                     }
+                }
 
-                    item { Text(text = "Daftar Hewan", style = MaterialTheme.typography.titleMedium) }
-
-                    items(filteredList) { hewan ->
-                        val index = MitosFaktaHewanSource.daftarMitosFaktaHewan.indexOf(hewan)
-                        val bgCard = listWarna[index % listWarna.size]
-                        val warnaBtn = warnaButton(bgCard)
-                        val isLoading = loadingMap[hewan.namaHewan] ?: false
-                        val isFinished = finishedList[hewan.namaHewan] ?: false
-
+                if (displayList.isEmpty()) {
+                    item { Text("Hewan tidak ditemukan", color = Color.Gray) }
+                } else {
+                    item { Text("Daftar Hewan", style = MaterialTheme.typography.titleMedium, color = Color.Black) }
+                    items(displayList) { hewan ->
+                        val bgCard = listWarna[displayList.indexOf(hewan) % listWarna.size]
+                        val isFinished = finishedList[hewan] ?: false
                         Card(
                             shape = RoundedCornerShape(28.dp),
-                            colors = CardDefaults.cardColors(
-                                containerColor = if (isFinished) Color(0xFF333333) else bgCard
-                            ),
-                            elevation = CardDefaults.cardElevation(2.dp)
+                            colors = CardDefaults.cardColors(containerColor = if (isFinished) Color(0xFF333333) else bgCard),
+                            modifier = Modifier.fillMaxWidth()
                         ) {
                             Column(modifier = Modifier.padding(16.dp)) {
                                 Box {
-                                    Image(
-                                        painter = painterResource(id = hewan.imageRes),
+                                    AsyncImage(
+                                        model = hewan.imageUrl,
                                         contentDescription = null,
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .height(170.dp)
-                                            .clip(RoundedCornerShape(20.dp)),
+                                        modifier = Modifier.fillMaxWidth().height(170.dp).clip(RoundedCornerShape(20.dp)),
                                         contentScale = ContentScale.Crop,
-                                        colorFilter = if (isFinished) ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(0f) }) else null,
-                                        alpha = if (isFinished) 0.4f else 1f
+                                        placeholder = painterResource(id = R.drawable.logo_zoopedia),
+                                        error = painterResource(id = R.drawable.logo_zoopedia)
                                     )
                                     IconButton(
-                                        onClick = { if (!isFinished) favList[hewan.namaHewan] = !(favList[hewan.namaHewan] ?: false) },
+                                        onClick = { favList[hewan] = !(favList[hewan] ?: false) },
                                         modifier = Modifier.align(Alignment.TopEnd)
                                     ) {
                                         Icon(
-                                            imageVector = if (favList[hewan.namaHewan] == true) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
+                                            imageVector = if (favList[hewan] == true) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
                                             contentDescription = null,
-                                            tint = if (favList[hewan.namaHewan] == true) Color.Red else Color.White
+                                            tint = if (favList[hewan] == true) Color.Red else Color.White
                                         )
                                     }
                                 }
                                 Spacer(modifier = Modifier.height(16.dp))
-
-                                Text(
-                                    text = hewan.namaHewan,
-                                    style = MaterialTheme.typography.titleMedium,
-                                    color = if (isFinished) Color.Gray else Color.Unspecified
-                                )
-                                Text(
-                                    text = "Mitos atau fakta tentang ${hewan.namaHewan.lowercase()}",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = if (isFinished) Color.DarkGray else Color.Unspecified
-                                )
-
+                                Text(hewan.namaHewan ?: "Hewan", style = MaterialTheme.typography.titleMedium, color = if (isFinished) Color.White else Color.Black)
+                                Text("Mitos atau fakta tentang ${(hewan.namaHewan ?: "").lowercase()}", style = MaterialTheme.typography.bodyMedium, color = if (isFinished) Color.LightGray else Color.DarkGray)
                                 Spacer(modifier = Modifier.height(16.dp))
-
                                 Button(
                                     onClick = {
                                         scope.launch {
-                                            if (isFinished) {
-                                                snackbarHostState.showSnackbar("Kuis ${hewan.namaHewan} sudah kamu selesaikan!")
-                                            } else {
-                                                loadingMap[hewan.namaHewan] = true
-                                                delay(2000)
-                                                loadingMap[hewan.namaHewan] = false
-                                                selectedHewan = hewan
-                                                currentScreen = "quiz"
-                                            }
+                                            loadingMap[hewan] = true
+                                            delay(1500)
+                                            loadingMap[hewan] = false
+                                            navController.navigate("quiz/${hewan.namaHewan ?: ""}")
                                         }
                                     },
                                     modifier = Modifier.fillMaxWidth(),
-                                    colors = ButtonDefaults.buttonColors(
-                                        containerColor = if (isFinished) Color.Black else warnaBtn
-                                    ),
-                                    enabled = !isLoading
+                                    enabled = !(loadingMap[hewan] ?: false) && !isFinished,
+                                    colors = ButtonDefaults.buttonColors(containerColor = if (isFinished) Color.Gray else warnaButton(bgCard), contentColor = Color.White)
                                 ) {
-                                    if (isLoading) {
-                                        CircularProgressIndicator(modifier = Modifier.size(20.dp), color = Color.White, strokeWidth = 2.dp)
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                        Text("Menyiapkan...")
-                                    } else {
-                                        Text(if (isFinished) "Selesai" else "Mulai")
-                                    }
+                                    if (loadingMap[hewan] == true) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp, color = Color.White)
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            Text("Menyiapkan...")
+                                        }
+                                    } else Text(if (isFinished) "Selesai" else "Mulai")
                                 }
                             }
                         }
                     }
                 }
             }
-        } else {
-            selectedHewan?.let { hewan ->
-                QuizPage(
-                    hewan = hewan,
-                    onBack = { currentScreen = "home" },
-                    onAnswer = {
-                        scope.launch {
-                            finishedList[hewan.namaHewan] = true
-                            snackbarHostState.showSnackbar("Quiz ${hewan.namaHewan} selesai!")
-                        }
-                    }
-                )
-            }
         }
-
-        SnackbarHost(
-            hostState = snackbarHostState,
-            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 32.dp)
-        )
+        SnackbarHost(hostState = snackbarHostState, modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 32.dp))
     }
 }
 
 @Composable
-fun QuizPage(hewan: MitosFaktaHewan, onBack: () -> Unit, onAnswer: () -> Unit) {
+fun QuizPage(hewan: MitosFaktaHewan, navController: NavController) {
     var clickedButton by remember { mutableStateOf<String?>(null) }
-    val soal = when(hewan.namaHewan) {
-        "Gajah" -> "gajah memiliki ingatan yang sangat kuat?"
-        "Singa" -> "singa jantan adalah pemburu utama dalam kelompok?"
-        "Panda" -> "panda termasuk ke dalam keluarga beruang?"
-        "Zebra" -> "warna kulit asli zebra adalah putih?"
-        "Harimau" -> "harimau menyukai air dan pandai berenang?"
-        else -> "Apakah ini fakta atau mitos?"
+    val scope = rememberCoroutineScope()
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    val (soal, jawabanBenar, alasan) = when (hewan.namaHewan) {
+        "Gajah" -> Triple("Apakah gajah memiliki ingatan yang kuat?", "Fakta", "Gajah punya otak terbesar di darat!")
+        "Singa" -> Triple("Apakah singa jantan pemburu utama?", "Mitos", "Singa betina yang melakukan 90% perburuan.")
+        "Panda" -> Triple("Apakah panda keluarga beruang?", "Fakta", "Secara genetik Panda adalah keluarga beruang.")
+        "Zebra" -> Triple("Warna asli zebra adalah putih?", "Mitos", "Warna aslinya hitam dengan garis putih.")
+        "Harimau" -> Triple("Harimau pandai berenang?", "Fakta", "Harimau adalah perenang yang sangat handal.")
+        else -> Triple("Apakah ini fakta?", "Fakta", "Jawaban benar!")
     }
 
-    Column(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(text = "Quiz ${hewan.namaHewan}", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.primary)
-        Spacer(modifier = Modifier.height(24.dp))
-        Image(painter = painterResource(id = hewan.imageRes), contentDescription = null, modifier = Modifier.fillMaxWidth().height(250.dp).clip(RoundedCornerShape(20.dp)), contentScale = ContentScale.Crop)
-        Spacer(modifier = Modifier.height(32.dp))
-        Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) {
-            Column(modifier = Modifier.padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(text = soal, style = MaterialTheme.typography.titleMedium, textAlign = TextAlign.Center)
-                Spacer(modifier = Modifier.height(32.dp))
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+    Box(modifier = Modifier.fillMaxSize()) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background)
+                .statusBarsPadding()
+                .padding(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text("Quiz ${hewan.namaHewan ?: ""}", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.primary)
+            Spacer(modifier = Modifier.height(24.dp))
+            AsyncImage(
+                model = hewan.imageUrl,
+                contentDescription = null,
+                modifier = Modifier.fillMaxWidth().height(200.dp).clip(RoundedCornerShape(10.dp)),
+                contentScale = ContentScale.Crop,
+                placeholder = painterResource(id = R.drawable.logo_zoopedia),
+                error = painterResource(id = R.drawable.logo_zoopedia)
+            )
+            Spacer(modifier = Modifier.height(24.dp))
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Color(0xFFE8F5E9), RoundedCornerShape(16.dp))
+                    .padding(20.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(soal, style = MaterialTheme.typography.titleMedium, textAlign = TextAlign.Center, color = Color.Black)
+                Spacer(modifier = Modifier.height(34.dp))
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     Button(
-                        onClick = { if(clickedButton == null) { clickedButton = "mitos"; onAnswer() } },
-                        modifier = Modifier.weight(1f),
-                        colors = ButtonDefaults.buttonColors(containerColor = if (clickedButton == "mitos") Color.Gray else Color(0xFFFF9800)),
+                        onClick = {
+                            clickedButton = "mitos"
+                            scope.launch { snackbarHostState.showSnackbar(if (jawabanBenar == "Mitos") "✅ Benar! $alasan" else "❌ Salah! $alasan") }
+                        },
+                        modifier = Modifier.weight(1f).height(34.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = OrangeMitos),
                         enabled = clickedButton == null
-                    ) { Text("Mitos") }
+                    ) { Text("Mitos", color = Color.Black) }
                     Button(
-                        onClick = { if(clickedButton == null) { clickedButton = "fakta"; onAnswer() } },
-                        modifier = Modifier.weight(1f),
-                        colors = ButtonDefaults.buttonColors(containerColor = if (clickedButton == "fakta") Color.Gray else Color(0xFF4CAF50)),
+                        onClick = {
+                            clickedButton = "fakta"
+                            scope.launch { snackbarHostState.showSnackbar(if (jawabanBenar == "Fakta") "✅ Benar! $alasan" else "❌ Salah! $alasan") }
+                        },
+                        modifier = Modifier.weight(1f).height(34.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                         enabled = clickedButton == null
-                    ) { Text("Fakta") }
+                    ) { Text("Fakta", color = Color.Black) }
                 }
             }
+            Spacer(modifier = Modifier.weight(1f))
+            Button(
+                onClick = { navController.popBackStack() },
+                modifier = Modifier.fillMaxWidth().navigationBarsPadding(),
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFB0BEC5))
+            ) { Text("Kembali ke Beranda", color = Color.Black) }
         }
-        Spacer(modifier = Modifier.weight(1f))
-        TextButton(onClick = onBack) { Text("Kembali ke Beranda") }
+        SnackbarHost(hostState = snackbarHostState, modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 32.dp))
     }
 }
