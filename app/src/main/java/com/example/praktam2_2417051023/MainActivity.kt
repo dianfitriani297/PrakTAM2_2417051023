@@ -31,9 +31,9 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import com.example.praktam2_2417051023.model.MitosFaktaHewan
+import com.example.praktam2_2417051023.data.model.MitosFaktaHewan
 import com.example.praktam2_2417051023.ui.theme.*
-import com.example.praktam2_2417051023.network.RetrofitClient
+import com.example.praktam2_2417051023.data.repository.HewanRepository
 import coil.compose.AsyncImage
 
 class MainActivity : ComponentActivity() {
@@ -79,6 +79,7 @@ fun warnaButton(warna: Color): Color {
 fun ZoopediaScreen(navController: NavController, onHewanLoaded: (List<MitosFaktaHewan>) -> Unit) {
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
+    val repository = remember { HewanRepository() }
 
     var hewanListInternal by remember { mutableStateOf<List<MitosFaktaHewan>>(emptyList()) }
     var isLoadingData by remember { mutableStateOf(true) }
@@ -91,7 +92,7 @@ fun ZoopediaScreen(navController: NavController, onHewanLoaded: (List<MitosFakta
 
     LaunchedEffect(Unit) {
         try {
-            val response = RetrofitClient.instance.getHewan()
+            val response = repository.getHewan()
             hewanListInternal = response
             onHewanLoaded(response)
             isLoadingData = false
