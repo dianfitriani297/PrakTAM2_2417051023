@@ -1,14 +1,22 @@
 package com.example.praktam2_2417051023.ui.theme
 
-import androidx.compose.material3.*
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 
 private val AppColorScheme = lightColorScheme(
     primary = GreenPrimary,
     secondary = GreenSoft,
+    tertiary = OrangeButton,
     background = BackgroundSoft,
     surface = CardSurface,
-    onPrimary = OnPrimaryText
+    error = SalahColor,
+    onPrimary = OnPrimaryText,
+    onSecondary = GreenPrimary,
+    onTertiary = OnPrimaryText,
+    onBackground = GreenPrimary,
+    onSurface = GreenPrimary,
+    onError = OnPrimaryText
 )
 
 @Composable

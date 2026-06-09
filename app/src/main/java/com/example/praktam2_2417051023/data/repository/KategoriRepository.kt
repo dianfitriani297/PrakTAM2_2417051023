@@ -1,12 +1,12 @@
 package com.example.praktam2_2417051023.data.repository
 
 import com.example.praktam2_2417051023.data.api.RetrofitClient
-import com.example.praktam2_2417051023.data.model.MitosFaktaHewan
+import com.example.praktam2_2417051023.data.model.KategoriHewan
 
-class HewanRepository {
-    suspend fun getHewan(): List<MitosFaktaHewan> {
+class KategoriRepository {
+    suspend fun getKategori(): List<KategoriHewan> {
         return try {
-            RetrofitClient.instance.getHewan()
+            RetrofitClient.instance.getKategori()
         } catch (_: Exception) {
             emptyList()
         }
